@@ -23,12 +23,16 @@ logger.addHandler(logging.FileHandler(config.get(MAIN_SEC, 'logfile')))
 logger.setLevel(getattr(logging, config.get(MAIN_SEC, 'loglevel')))
 
 
-def ip_neigh_match(regex):
+def ip_neigh_match(regex, exclude=None):
     stdout = Popen(['ip', 'neigh'], stdout=PIPE, stderr=PIPE).communicate()[0]
     stdout = stdout.decode('utf8')
 
     regex = re.compile(regex)
+    if exclude:
+        exclude = re.compile(exclude)
     for neighbor in stdout.splitlines():
+        if exclude and exclude.match(neighbor):
+            continue
         if regex.match(neighbor):
             return True
     return False
@@ -62,7 +66,9 @@ def main():
     for section in config.sections():
         if section == config.default_section:
             continue
-        if ip_neigh_match(config.get(section, 'regex')):
+        if ip_neigh_match(
+                config.get(section, 'regex'),
+                config.get(section, 'exclude', fallback=None)):
             cmd = config.get(section, 'command_match')
         else:
             cmd = config.get(section, 'command_no_match')
