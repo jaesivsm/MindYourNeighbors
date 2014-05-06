@@ -9,26 +9,78 @@ from subprocess import Popen, PIPE
 
 
 config = ConfigParser(defaults={
-        'logfile': '/var/log/neighbors.log',
+        'logfile': '/home/jaes/neighbors.log',
         'loglevel': 'INFO',
         'error_on_stderr': 'true',
-        'cache_file': '/run/mind_your_neighbors.cache',
+        'cache_file': '/run/shm/mind_your_neighbors.cache',
         'trigger': '3',
 })
 config.read(['/etc/mind_your_neighbors.conf',
     os.path.expanduser('~/.config/mind_your_neighbors.conf')])
 MAIN_SEC = config.default_section
+DEFAULT_CACHE_FILE = config.get(MAIN_SEC, 'cache_file')
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.FileHandler(config.get(MAIN_SEC, 'logfile')))
 logger.setLevel(getattr(logging, config.get(MAIN_SEC, 'loglevel')))
 
+__ip_neigh_match_cache = None
 
-def ip_neigh_match(regex, exclude=None):
-    stdout = Popen(['ip', 'neigh'], stdout=PIPE, stderr=PIPE).communicate()[0]
-    stdout = stdout.decode('utf8')
 
-    regex = re.compile(regex)
+class Cache(object):
+    __cache_dict = {}
+    _cache_file = '/run/shm/mind_your_neighbors.cache'
+
+    def __init__(self, section_name):
+        self.section_name = section_name
+        if not self.__cache_dict and os.path.exists(self._cache_file):
+            with open(self._cache_file, 'r') as fp:
+                self.__cache_dict.update(json.load(fp))
+
+    @classmethod
+    def dump(cls):
+        if cls.__cache_dict is not None:
+            with open(cls._cache_file, 'w') as fp:
+                json.dump(cls.__cache_dict, fp)
+
+    @property
+    def section(self):
+        if not self.section_name in self.__cache_dict:
+            self.__cache_dict[self.section_name] = {
+                    'results': [], 'last_command': None}
+        return self.__cache_dict[self.section_name]
+
+    def cache_result(self, result, trigger):
+        self.section['results'].append(result)
+        self.section['results'] = self.section['results'][-trigger:]
+        logger.debug('cache: %r => %r' % (self.section_name,
+                                          self.section['results']))
+
+    def get_result_count(self, result):
+        return self.section['results'].count(result)
+
+    def cache_command(self, command):
+        self.section['last_command'] = command
+
+    @property
+    def last_command(self):
+        return self.section['last_command']
+
+
+def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
+    assert neighbor_ip4 or neighbor_ip6
+    global __ip_neigh_match_cache
+    if __ip_neigh_match_cache:
+        stdout = __ip_neigh_match_cache
+    else:
+        stdout = __ip_neigh_match_cache = Popen(['ip', 'neigh'], stdout=PIPE,
+                 stderr=PIPE).communicate()[0].decode('utf8')
+
+    regex = re.compile('%s.*(REACHABLE|STALE)' % (
+                       (neighbor_ip4 or neighbor_ip6)
+                       if not (neighbor_ip4 and neighbor_ip6)
+                       else '(%s|%s)' % (neighbor_ip4, neighbor_ip6)))
+
     if exclude:
         exclude = re.compile(exclude)
     for neighbor in stdout.splitlines():
@@ -42,62 +94,41 @@ def ip_neigh_match(regex, exclude=None):
     return False
 
 
-def is_in_cache(key, value):
-    path = config.get(MAIN_SEC, 'cache_file')
-    if not os.path.exists(path):
-        return False
-    with open(path, 'r') as fp:
-        cache = json.load(fp)
-    if cache.get(key, []).count(value) == config.getint(MAIN_SEC, 'trigger'):
-        return cache[key][-1] == value
-    return None
-
-
-def write_cache(key, value):
-    path = config.get(MAIN_SEC, 'cache_file')
-    if os.path.exists(path):
-        with open(path, 'r') as fp:
-            cache = json.load(fp)
-    else:
-        cache = {}
-    if key in cache:
-        cache[key].append(value)
-    else:
-        cache[key] = [value]
-    cache[key] = cache[key][-config.getint(MAIN_SEC, 'trigger'):]
-    logger.debug('write_cache: %r => %r' % (key, cache[key]))
-    with open(config.get(MAIN_SEC, 'cache_file'), 'w') as fp:
-        json.dump(cache, fp)
-
-
 def main():
+    cache_file = config.get(config.default_section, 'cache_file')
     for section in config.sections():
         if section == config.default_section:
             continue
 
-        if ip_neigh_match(
-                config.get(section, 'regex'),
-                config.get(section, 'exclude', fallback=None)):
-            cmd = config.get(section, 'command_match')
-            result = 'match'
-        else:
-            cmd = config.get(section, 'command_no_match')
-            result = 'no_match'
+        cache = Cache(section)
 
-        in_cache = is_in_cache(section, result)
-        if in_cache is True:
-            continue
-        if in_cache is None:
-            write_cache(section, result)
+        trigger = config.getint(section, 'trigger')
+
+        if check_neighborhood(
+                config.get(section, 'neighbor_ip4'),
+                config.get(section, 'neighbor_ip6'),
+                config.get(section, 'exclude', fallback=None)):
+            cmd = config.get(section, 'command_neighbor')
+            result = 'neighbor'
+        else:
+            cmd = config.get(section, 'command_no_neighbor')
+            result = 'no_neighbor'
+
+        cache.cache_result(result, trigger)
+        if cache.get_result_count(result) != trigger \
+                or cache.last_command == cmd:
             continue
 
         logger.warn('launching %r' % cmd)
+
         process = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
         stderr = process.communicate()[1]
         if stderr and config.getboolean(section, 'error_on_stderr'):
             logger.error(stderr)
-        write_cache(section, result)
+
+        cache.cache_command(cmd)
 
 
 if __name__ == '__main__':
     main()
+    Cache.dump()
