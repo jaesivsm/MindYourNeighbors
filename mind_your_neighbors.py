@@ -8,11 +8,13 @@ from configparser import ConfigParser
 from subprocess import Popen, PIPE
 
 
+DEFAULT_CACHE_FILE = '/run/shm/mind_your_neighbors.cache'
+
 config = ConfigParser(defaults={
         'logfile': '/home/jaes/neighbors.log',
         'loglevel': 'INFO',
         'error_on_stderr': 'true',
-        'cache_file': '/run/shm/mind_your_neighbors.cache',
+        'cache_file': DEFAULT_CACHE_FILE,
         'trigger': '3',
 })
 config.read(['/etc/mind_your_neighbors.conf',
@@ -21,15 +23,18 @@ MAIN_SEC = config.default_section
 DEFAULT_CACHE_FILE = config.get(MAIN_SEC, 'cache_file')
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.FileHandler(config.get(MAIN_SEC, 'logfile')))
-logger.setLevel(getattr(logging, config.get(MAIN_SEC, 'loglevel')))
-
-__ip_neigh_match_cache = None
+formatter = logging.Formatter('%(asctime)s - %(levelname)-8s - %(message)s')
+log_level = getattr(logging, config.get(MAIN_SEC, 'loglevel').upper())
+handler = logging.FileHandler(config.get(MAIN_SEC, 'logfile'))
+handler.setFormatter(formatter)
+handler.setLevel(log_level)
+logger.addHandler(handler)
+logger.setLevel(log_level)
 
 
 class Cache(object):
     __cache_dict = {}
-    _cache_file = '/run/shm/mind_your_neighbors.cache'
+    _cache_file = DEFAULT_CACHE_FILE
 
     def __init__(self, section_name):
         self.section_name = section_name
@@ -53,8 +58,9 @@ class Cache(object):
     def cache_result(self, result, trigger):
         self.section['results'].append(result)
         self.section['results'] = self.section['results'][-trigger:]
-        logger.debug('cache: %r => %r' % (self.section_name,
-                                          self.section['results']))
+        if self.get_result_count(result) not in (0, 3):
+            logger.info('cache: %r => %r' % (self.section_name,
+                                             self.section['results']))
 
     def get_result_count(self, result):
         return self.section['results'].count(result)
@@ -67,13 +73,15 @@ class Cache(object):
         return self.section['last_command']
 
 
+__neighborhood_cache = None
+
 def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
     assert neighbor_ip4 or neighbor_ip6
-    global __ip_neigh_match_cache
-    if __ip_neigh_match_cache:
-        stdout = __ip_neigh_match_cache
+    global __neighborhood_cache
+    if __neighborhood_cache:
+        stdout = __neighborhood_cache
     else:
-        stdout = __ip_neigh_match_cache = Popen(['ip', 'neigh'], stdout=PIPE,
+        stdout = __neighborhood_cache = Popen(['ip', 'neigh'], stdout=PIPE,
                  stderr=PIPE).communicate()[0].decode('utf8')
 
     regex = re.compile('%s.*(REACHABLE|STALE)' % (
@@ -100,6 +108,10 @@ def main():
         if section == config.default_section:
             continue
 
+        if not config.getint(section, 'enabled', fallback=False):
+            logger.debug('section %r not enabled', section)
+            continue
+
         cache = Cache(section)
 
         trigger = config.getint(section, 'trigger')
@@ -115,8 +127,11 @@ def main():
             result = 'no_neighbor'
 
         cache.cache_result(result, trigger)
-        if cache.get_result_count(result) != trigger \
-                or cache.last_command == cmd:
+        if cache.get_result_count(result) != trigger:
+            logger.debug("cache count hasn't reached trigger (%r)", trigger)
+            continue
+        if cache.last_command == cmd:
+            logger.debug("command %r already launched", cmd)
             continue
 
         logger.warn('launching %r' % cmd)
