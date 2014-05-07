@@ -103,12 +103,13 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
 
 
 def main():
+    processes = {}
     cache_file = config.get(config.default_section, 'cache_file')
     for section in config.sections():
         if section == config.default_section:
             continue
 
-        if not config.getint(section, 'enabled', fallback=False):
+        if not config.getboolean(section, 'enabled', fallback=False):
             logger.debug('section %r not enabled', section)
             continue
 
@@ -135,15 +136,17 @@ def main():
             continue
 
         logger.warn('launching %r' % cmd)
-
-        process = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        stderr = process.communicate()[1]
-        if stderr and config.getboolean(section, 'error_on_stderr'):
-            logger.error(stderr)
-
         cache.cache_command(cmd)
+        processes[section] = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+
+    Cache.dump()
+    for section in processes:
+        if config.getboolean(section, 'error_on_stderr'):
+            stdout, stderr = processes[section].communicate()
+            logger.debug(stdout)
+            if stderr:
+                logger.error(stderr)
 
 
 if __name__ == '__main__':
     main()
-    Cache.dump()
