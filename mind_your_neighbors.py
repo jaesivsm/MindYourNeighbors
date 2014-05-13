@@ -56,11 +56,12 @@ class Cache(object):
         return self.__cache_dict[self.section_name]
 
     def cache_result(self, result, trigger):
+        count = self.get_result_count(result)
         self.section['results'].append(result)
         self.section['results'] = self.section['results'][-trigger:]
-        if self.get_result_count(result) not in (0, 3):
-            logger.info('cache: %r => %r' % (self.section_name,
-                                             self.section['results']))
+        if count != 3:
+            logger.debug('cache/%s/%s %d => %d', self.section_name, result,
+                        count, self.get_result_count(result))
 
     def get_result_count(self, result):
         return self.section['results'].count(result)
@@ -90,7 +91,7 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
                        else '(%s|%s)' % (neighbor_ip4, neighbor_ip6)))
 
     if exclude:
-        exclude = re.compile(exclude)
+        exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
     for neighbor in stdout.splitlines():
         if exclude and exclude.match(neighbor):
             logger.debug("line %r is excluded" % neighbor)
@@ -136,8 +137,9 @@ def main():
             continue
 
         logger.warn('launching %r' % cmd)
+        logger.info('cache is %r' % __neighborhood_cache)
         cache.cache_command(cmd)
-        processes[section] = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        processes[section] = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
 
     Cache.dump()
     for section in processes:
