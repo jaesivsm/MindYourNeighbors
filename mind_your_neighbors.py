@@ -1,51 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os
 import re
 import json
 import logging
+from os import path
+from logging.handlers import SysLogHandler
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
 
 
-DEFAULT_CACHE_FILE = '/run/shm/mind_your_neighbors.cache'
-
-config = ConfigParser(defaults={
-        'logfile': '/home/jaes/neighbors.log',
-        'loglevel': 'INFO',
-        'error_on_stderr': 'true',
-        'cache_file': DEFAULT_CACHE_FILE,
-        'trigger': '3',
-})
-config.read(['/etc/mind_your_neighbors.conf',
-    os.path.expanduser('~/.config/mind_your_neighbors.conf')])
-MAIN_SEC = config.default_section
-DEFAULT_CACHE_FILE = config.get(MAIN_SEC, 'cache_file')
-
-logger = logging.getLogger(__name__)
-formatter = logging.Formatter('%(asctime)s - %(levelname)-8s - %(message)s')
-log_level = getattr(logging, config.get(MAIN_SEC, 'loglevel').upper())
-handler = logging.FileHandler(config.get(MAIN_SEC, 'logfile'))
-handler.setFormatter(formatter)
-handler.setLevel(log_level)
-logger.addHandler(handler)
-logger.setLevel(log_level)
-
-
 class Cache(object):
     __cache_dict = {}
-    _cache_file = DEFAULT_CACHE_FILE
 
-    def __init__(self, section_name):
+    def __init__(self, section_name, cache_file):
         self.section_name = section_name
-        if not self.__cache_dict and os.path.exists(self._cache_file):
-            with open(self._cache_file, 'r') as fp:
+        if not self.__cache_dict and path.exists(cache_file):
+            with open(cache_file, 'r') as fp:
                 self.__cache_dict.update(json.load(fp))
 
     @classmethod
-    def dump(cls):
+    def dump(cls, cache_file):
         if cls.__cache_dict is not None:
-            with open(cls._cache_file, 'w') as fp:
+            with open(cache_file, 'w') as fp:
                 json.dump(cls.__cache_dict, fp)
 
     @property
@@ -60,6 +36,7 @@ class Cache(object):
         self.section['results'].append(result)
         self.section['results'] = self.section['results'][-trigger:]
         if count != 3:
+            logger = logging.getLogger('MingYourNeighbors')
             logger.debug('cache/%s/%s %d => %d', self.section_name, result,
                         count, self.get_result_count(result))
 
@@ -78,6 +55,7 @@ __neighborhood_cache = None
 
 def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
     assert neighbor_ip4 or neighbor_ip6
+    logger = logging.getLogger('MingYourNeighbors')
     global __neighborhood_cache
     if __neighborhood_cache:
         stdout = __neighborhood_cache
@@ -103,8 +81,9 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
     return False
 
 
-def main():
+def browse_config(config):
     processes = {}
+    logger = logging.getLogger('MingYourNeighbors')
     cache_file = config.get(config.default_section, 'cache_file')
     for section in config.sections():
         if section == config.default_section:
@@ -114,7 +93,7 @@ def main():
             logger.debug('section %r not enabled', section)
             continue
 
-        cache = Cache(section)
+        cache = Cache(section, cache_file)
 
         trigger = config.getint(section, 'trigger')
 
@@ -136,18 +115,50 @@ def main():
             logger.debug("command %r already launched", cmd)
             continue
 
-        logger.warn('launching %r' % cmd)
-        logger.info('cache is %r' % __neighborhood_cache)
+        if logger.isEnabledFor(logging.INFO):
+            logger.info('cache content is :')
+            for line in __neighborhood_cache.splitlines():
+                logger.info(line)
         cache.cache_command(cmd)
+        logger.warn('launching %r' % cmd)
         processes[section] = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
 
-    Cache.dump()
+    Cache.dump(cache_file)
     for section in processes:
         if config.getboolean(section, 'error_on_stderr'):
             stdout, stderr = processes[section].communicate()
             logger.debug(stdout)
             if stderr:
                 logger.error(stderr)
+
+
+def set_logger(loglevel, logfile=None):
+    logger = logging.getLogger('MingYourNeighbors')
+    log_level = getattr(logging, loglevel.upper())
+    if logfile:
+        handler = logging.FileHandler(path.expanduser(logfile))
+        formatter = logging.Formatter('%(asctime)s %(levelname)s - %(message)s')
+    else:
+        handler = SysLogHandler(address='/dev/log')
+        formatter = logging.Formatter('%(name)s: %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    handler.setLevel(log_level)
+    logger.addHandler(handler)
+    logger.setLevel(log_level)
+
+
+def main():
+    config = ConfigParser(defaults={
+            'loglevel': 'INFO',
+            'error_on_stderr': 'true',
+            'cache_file': '/run/shm/mind_your_neighbors.cache',
+            'trigger': '3',
+    })
+    config.read(['/etc/mind_your_neighbors.conf',
+                path.expanduser('~/.config/mind_your_neighbors.conf')])
+    set_logger(config.get(config.default_section, 'loglevel'),
+               config.get(config.default_section, 'logfile', fallback=None))
+    browse_config(config)
 
 
 if __name__ == '__main__':
