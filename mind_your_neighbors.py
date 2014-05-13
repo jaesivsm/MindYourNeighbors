@@ -12,8 +12,8 @@ from subprocess import Popen, PIPE
 class Cache(object):
     __cache_dict = {}
 
-    def __init__(self, section_name, cache_file):
-        self.section_name = section_name
+    def __init__(self, section, cache_file):
+        self.section_name = section.name
         if not self.__cache_dict and path.exists(cache_file):
             with open(cache_file, 'r') as fp:
                 self.__cache_dict.update(json.load(fp))
@@ -31,11 +31,11 @@ class Cache(object):
                     'results': [], 'last_command': None}
         return self.__cache_dict[self.section_name]
 
-    def cache_result(self, result, trigger):
+    def cache_result(self, result, threshold):
         count = self.get_result_count(result)
         self.section['results'].append(result)
-        self.section['results'] = self.section['results'][-trigger:]
-        if count != 3:
+        self.section['results'] = self.section['results'][-threshold:]
+        if count != threshold:
             logger = logging.getLogger('MingYourNeighbors')
             logger.debug('cache/%s/%s %d => %d', self.section_name, result,
                         count, self.get_result_count(result))
@@ -70,49 +70,49 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
 
     if exclude:
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
+    result = False
     for neighbor in stdout.splitlines():
         if exclude and exclude.match(neighbor):
-            logger.debug("line %r is excluded" % neighbor)
+            logger.debug("EXCLUDED - %r" % neighbor)
             continue
         if regex.match(neighbor):
-            logger.debug("line %r is a match" % neighbor)
-            return True
-        logger.debug("line %r is no match" % neighbor)
-    return False
+            logger.debug("MATCH    - %r" % neighbor)
+            result = True
+        else:
+            logger.debug("NO MATCH - %r" % neighbor)
+    return result
 
 
 def browse_config(config):
     processes = {}
     logger = logging.getLogger('MingYourNeighbors')
     cache_file = config.get(config.default_section, 'cache_file')
-    for section in config.sections():
-        if section == config.default_section:
+    for section in config.values():
+        if section.name == config.default_section:
             continue
 
-        if not config.getboolean(section, 'enabled', fallback=False):
+        if not section.getboolean('enabled', fallback=False):
             logger.debug('section %r not enabled', section)
             continue
 
         cache = Cache(section, cache_file)
 
-        trigger = config.getint(section, 'trigger')
+        threshold = section.getint('threshold')
 
-        if check_neighborhood(
-                config.get(section, 'neighbor_ip4'),
-                config.get(section, 'neighbor_ip6'),
-                config.get(section, 'exclude', fallback=None)):
-            cmd = config.get(section, 'command_neighbor')
+        if check_neighborhood(section.get('neighbor_ip4'),
+                              section.get('neighbor_ip6'),
+                              section.get('exclude', fallback=None)):
+            cmd = section.get('command_neighbor')
             result = 'neighbor'
         else:
-            cmd = config.get(section, 'command_no_neighbor')
+            cmd = section.get('command_no_neighbor')
             result = 'no_neighbor'
 
-        cache.cache_result(result, trigger)
-        if cache.get_result_count(result) != trigger:
-            logger.debug("cache count hasn't reached trigger (%r)", trigger)
+        cache.cache_result(result, threshold)
+        if cache.get_result_count(result) != threshold:
+            logger.debug("cache count hasn't reached threshold (%r)", threshold)
             continue
         if cache.last_command == cmd:
-            logger.debug("command %r already launched", cmd)
             continue
 
         if logger.isEnabledFor(logging.INFO):
@@ -120,12 +120,12 @@ def browse_config(config):
             for line in __neighborhood_cache.splitlines():
                 logger.info(line)
         cache.cache_command(cmd)
-        logger.warn('launching %r' % cmd)
-        processes[section] = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
+        logger.warn('LAUNCHING - %r' % cmd)
+        processes[section.name] = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
 
     Cache.dump(cache_file)
     for section in processes:
-        if config.getboolean(section, 'error_on_stderr'):
+        if config.getboolean(section, 'error_on_stderr', fallback=False):
             stdout, stderr = processes[section].communicate()
             logger.debug(stdout)
             if stderr:
@@ -152,7 +152,7 @@ def main():
             'loglevel': 'INFO',
             'error_on_stderr': 'true',
             'cache_file': '/run/shm/mind_your_neighbors.cache',
-            'trigger': '3',
+            'threshold': '3',
     })
     config.read(['/etc/mind_your_neighbors.conf',
                 path.expanduser('~/.config/mind_your_neighbors.conf')])
