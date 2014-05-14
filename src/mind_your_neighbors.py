@@ -26,17 +26,19 @@ class Cache(object):
 
     @property
     def section(self):
+        """Returns the stored dictionnary for the instance's section."""
         if not self.section_name in self.__cache_dict:
             self.__cache_dict[self.section_name] = {
                     'results': [], 'last_command': None}
         return self.__cache_dict[self.section_name]
 
     def cache_result(self, result, threshold):
+        """Store a result into cache and maintain the cache coherent."""
         count = self.get_result_count(result)
         self.section['results'].append(result)
         self.section['results'] = self.section['results'][-threshold:]
         if count != threshold:
-            logger = logging.getLogger('MingYourNeighbors')
+            logger = logging.getLogger('MindYourNeighbors')
             logger.debug('cache/%s/%s %d => %d', self.section_name, result,
                         count, self.get_result_count(result))
 
@@ -44,6 +46,7 @@ class Cache(object):
         return self.section['results'].count(result)
 
     def cache_command(self, command):
+        """Store *command* as the last command launched."""
         self.section['last_command'] = command
 
     @property
@@ -54,8 +57,12 @@ class Cache(object):
 __neighborhood_cache = None
 
 def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
+    """Will execute *ip neigh* unless the result of the command has been
+    cached. Will then compile a specific regex for the given parameters and
+    return True if matching result means there is someone in the local network.
+    """
     assert neighbor_ip4 or neighbor_ip6
-    logger = logging.getLogger('MingYourNeighbors')
+    logger = logging.getLogger('MindYourNeighbors')
     global __neighborhood_cache
     if __neighborhood_cache:
         stdout = __neighborhood_cache
@@ -84,8 +91,11 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
 
 
 def browse_config(config):
+    """Will browse all section of the config,
+    fill cache and launch command when needed.
+    """
     processes = {}
-    logger = logging.getLogger('MingYourNeighbors')
+    logger = logging.getLogger('MindYourNeighbors')
     cache_file = config.get(config.default_section, 'cache_file')
     for section in config.values():
         if section.name == config.default_section:
@@ -112,7 +122,7 @@ def browse_config(config):
         if cache.get_result_count(result) != threshold:
             logger.debug("cache count hasn't reached threshold (%r)", threshold)
             continue
-        if cache.last_command == cmd:
+        if cache.last_command == cmd:  # command has already been run
             continue
 
         if logger.isEnabledFor(logging.INFO):
@@ -133,7 +143,7 @@ def browse_config(config):
 
 
 def set_logger(loglevel, logfile=None):
-    logger = logging.getLogger('MingYourNeighbors')
+    logger = logging.getLogger('MindYourNeighbors')
     log_level = getattr(logging, loglevel.upper())
     if logfile:
         handler = logging.FileHandler(path.expanduser(logfile))
