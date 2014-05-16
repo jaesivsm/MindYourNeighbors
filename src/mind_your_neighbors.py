@@ -4,6 +4,7 @@ import re
 import json
 import logging
 from os import path
+from functools import lru_cache
 from logging.handlers import SysLogHandler
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
@@ -54,7 +55,11 @@ class Cache(object):
         return self.section['last_command']
 
 
-__neighborhood_cache = None
+@lru_cache(maxsize=None)
+def ip_neigh():
+    return Popen(['ip', 'neigh'], stdout=PIPE, stderr=PIPE
+                ).communicate()[0].decode('utf8').splitlines()
+
 
 def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
     """Will execute *ip neigh* unless the result of the command has been
@@ -63,12 +68,6 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
     """
     assert neighbor_ip4 or neighbor_ip6
     logger = logging.getLogger('MindYourNeighbors')
-    global __neighborhood_cache
-    if __neighborhood_cache:
-        stdout = __neighborhood_cache
-    else:
-        stdout = __neighborhood_cache = Popen(['ip', 'neigh'], stdout=PIPE,
-                 stderr=PIPE).communicate()[0].decode('utf8')
 
     regex = re.compile('%s.*(REACHABLE|STALE)' % (
                        (neighbor_ip4 or neighbor_ip6)
@@ -78,7 +77,7 @@ def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
     if exclude:
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
     result = False
-    for neighbor in stdout.splitlines():
+    for neighbor in ip_neigh():
         if exclude and exclude.match(neighbor):
             logger.debug("EXCLUDED - %r" % neighbor)
             continue
@@ -127,7 +126,7 @@ def browse_config(config):
 
         if logger.isEnabledFor(logging.INFO):
             logger.info('cache content is :')
-            for line in __neighborhood_cache.splitlines():
+            for line in ip_neigh():
                 logger.info(line)
         cache.cache_command(cmd)
         logger.warn('LAUNCHING - %r' % cmd)
