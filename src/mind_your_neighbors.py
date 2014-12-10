@@ -10,7 +10,7 @@ from configparser import ConfigParser
 from subprocess import Popen, PIPE
 
 
-class Cache(object):
+class Cache:
     __cache_dict = {}
 
     def __init__(self, section, cache_file):
@@ -61,18 +61,14 @@ def ip_neigh():
                 ).communicate()[0].decode('utf8').splitlines()
 
 
-def check_neighborhood(neighbor_ip4=None, neighbor_ip6=None, exclude=None):
+def check_neighborhood(filter_on, exclude=None):
     """Will execute *ip neigh* unless the result of the command has been
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
     """
-    assert neighbor_ip4 or neighbor_ip6
     logger = logging.getLogger('MindYourNeighbors')
 
-    regex = re.compile('%s.*(REACHABLE|STALE)' % (
-                       (neighbor_ip4 or neighbor_ip6)
-                       if not (neighbor_ip4 and neighbor_ip6)
-                       else '(%s|%s)' % (neighbor_ip4, neighbor_ip6)))
+    regex = re.compile('%s.*(REACHABLE|STALE)' % filter_on)
 
     if exclude:
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
@@ -108,8 +104,7 @@ def browse_config(config):
 
         threshold = section.getint('threshold')
 
-        if check_neighborhood(section.get('neighbor_ip4'),
-                              section.get('neighbor_ip6'),
+        if check_neighborhood(section.get('filter_on'),
                               section.get('exclude', fallback=None)):
             cmd = section.get('command_neighbor')
             result = 'neighbor'
@@ -129,8 +124,12 @@ def browse_config(config):
             for line in ip_neigh():
                 logger.info(line)
         cache.cache_command(cmd)
-        logger.warn('LAUNCHING - %r' % cmd)
-        processes[section.name] = Popen(cmd.split(), stdout=PIPE, stderr=PIPE)
+        if cmd:
+            logger.warn('LAUNCHING - %r', cmd)
+            processes[section.name] = Popen(cmd.split(),
+                                            stdout=PIPE, stderr=PIPE)
+        else:
+            logger.info('no command to launch')
 
     Cache.dump(cache_file)
     for section in processes:
