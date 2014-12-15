@@ -68,7 +68,7 @@ def check_neighborhood(filter_on, exclude=None):
     """
     logger = logging.getLogger('MindYourNeighbors')
 
-    regex = re.compile('%s.*(REACHABLE|STALE)' % filter_on)
+    regex = re.compile('.*%s.*(REACHABLE|STALE)' % filter_on)
 
     if exclude:
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
