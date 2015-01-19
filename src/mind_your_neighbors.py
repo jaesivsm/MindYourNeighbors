@@ -100,6 +100,7 @@ def browse_config(config):
             logger.debug('section %r not enabled', section)
             continue
 
+        logger.info('%r - processing section', section.name)
         cache = Cache(section, cache_file)
 
         threshold = section.getint('threshold')
@@ -113,19 +114,19 @@ def browse_config(config):
             result = 'no_neighbor'
 
         cache.cache_result(result, threshold)
-        if cache.get_result_count(result) != threshold:
-            logger.debug("cache count hasn't reached threshold (%r)", threshold)
+        logger.info('%r - cache state: %r', section.name, cache.section)
+        count = cache.get_result_count(result)
+        if count != threshold:
+            logger.warn("%r - cache count hasn't reached threshold yet "
+                        "(%d/%d)", section.name, count, threshold)
             continue
-        if cache.last_command == cmd:  # command has already been run
+        if cache.last_command == cmd:
+            logger.info('%r - command has already been run', section.name)
             continue
 
-        if logger.isEnabledFor(logging.INFO):
-            logger.info('cache content is :')
-            for line in ip_neigh():
-                logger.info(line)
         cache.cache_command(cmd)
         if cmd:
-            logger.warn('LAUNCHING - %r', cmd)
+            logger.warn('%r - launching: %r', section.name, cmd)
             processes[section.name] = Popen(cmd.split(),
                                             stdout=PIPE, stderr=PIPE)
         else:
@@ -133,11 +134,17 @@ def browse_config(config):
 
     Cache.dump(cache_file)
     for section in processes:
-        if config.getboolean(section, 'error_on_stderr', fallback=False):
-            stdout, stderr = processes[section].communicate()
-            logger.debug(stdout)
-            if stderr:
-                logger.error(stderr)
+        if not config.getboolean(section, 'error_on_stderr', fallback=False):
+            continue
+        stdout, stderr = processes[section].communicate()
+        logger.debug(stdout)
+        if not stderr:
+            continue
+        logger.error('%r - an error occured, removing stored command',
+                     section.name)
+        cache = Cache(section, cache_file)
+        cache.cache_command(None)
+        logger.error('%r - command stderr was: %r', section.name, stderr)
 
 
 def set_logger(loglevel, logfile=None):
