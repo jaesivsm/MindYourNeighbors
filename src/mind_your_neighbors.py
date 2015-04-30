@@ -28,7 +28,7 @@ class Cache:
     @property
     def section(self):
         """Returns the stored dictionnary for the instance's section."""
-        if not self.section_name in self.__cache_dict:
+        if self.section_name not in self.__cache_dict:
             self.__cache_dict[self.section_name] = {
                     'results': [], 'last_command': None}
         return self.__cache_dict[self.section_name]
@@ -57,8 +57,8 @@ class Cache:
 
 @lru_cache(maxsize=None)
 def ip_neigh():
-    return Popen(['ip', 'neigh'], stdout=PIPE, stderr=PIPE
-                ).communicate()[0].decode('utf8').splitlines()
+    return Popen(['ip', 'neigh'], stdout=PIPE, stderr=PIPE)\
+            .communicate()[0].decode('utf8').splitlines()
 
 
 def check_neighborhood(filter_on, exclude=None):
@@ -100,7 +100,7 @@ def browse_config(config):
             logger.debug('section %r not enabled', section)
             continue
 
-        logger.info('%r - processing section', section.name)
+        logger.debug('%r - processing section', section.name)
         cache = Cache(section, cache_file)
 
         threshold = section.getint('threshold')
@@ -150,12 +150,13 @@ def browse_config(config):
 def set_logger(loglevel, logfile=None):
     logger = logging.getLogger('MindYourNeighbors')
     log_level = getattr(logging, loglevel.upper())
+    base_format = '%(levelname)s - %(message)s'
     if logfile:
         handler = logging.FileHandler(path.expanduser(logfile))
-        formatter = logging.Formatter('%(asctime)s %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s ' + base_format)
     else:
         handler = SysLogHandler(address='/dev/log')
-        formatter = logging.Formatter('%(name)s: %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(name)s: ' + base_format)
     handler.setFormatter(formatter)
     handler.setLevel(log_level)
     logger.addHandler(handler)
