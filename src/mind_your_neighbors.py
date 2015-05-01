@@ -5,9 +5,10 @@ import json
 import logging
 from os import path
 from functools import lru_cache
-from logging.handlers import SysLogHandler
-from configparser import ConfigParser
 from subprocess import Popen, PIPE
+from collections import defaultdict
+from configparser import ConfigParser
+from logging.handlers import SysLogHandler
 
 
 class Cache:
@@ -61,7 +62,17 @@ def ip_neigh():
             .communicate()[0].decode('utf8').splitlines()
 
 
-def check_neighborhood(filter_on, exclude=None):
+@lru_cache(maxsize=None)
+def nslookup(addr):
+    result = Popen(['nslookup', addr], stdout=PIPE, stderr=PIPE)\
+            .communicate()[0].decode('utf8')
+    for line in result.splitlines():
+        if 'name = ' in line:
+            return line.rsplit('name = ')[-1]
+    return None
+
+
+def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
     """Will execute *ip neigh* unless the result of the command has been
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
@@ -72,17 +83,41 @@ def check_neighborhood(filter_on, exclude=None):
 
     if exclude:
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
-    result = False
+    result = defaultdict(list)
+    addr_by_mac = defaultdict(lambda: defaultdict(list))
     for neighbor in ip_neigh():
         if exclude and exclude.match(neighbor):
-            logger.debug("EXCLUDED - %r" % neighbor)
-            continue
-        if regex.match(neighbor):
-            logger.debug("MATCH    - %r" % neighbor)
-            result = True
+            key = 'excluded'
+        elif regex.match(neighbor):
+            key = 'matched'
         else:
-            logger.debug("NO MATCH - %r" % neighbor)
-    return result
+            key = 'no match'
+        result[key] = neighbor
+        try:  # debugging informations gathering
+            addr, _, _, _, mac, _ = neighbor.split()
+            addr_by_mac[key][mac].append(addr)
+        except Exception:
+            pass
+
+    # printing debug informations on results
+    for loglevel, key in ((logging.DEBUG, 'excluded'),
+                          (logging.INFO, 'matched'),
+                          (logging.DEBUG, 'no match')):
+        if logger.isEnabledFor(loglevel):
+            for mac, addrs in addr_by_mac[key].items():
+                message = '%s - %s - ' % (key.upper(), mac)
+                if lookup_addr:
+                    fqdns = set()
+                    for addr in addrs:
+                        fqdn = nslookup(addr)
+                        if fqdn is not None:
+                            fqdns.add(fqdn)
+                    if fqdns:
+                        message += '- FQDNS: ' + ' '.join(fqdns)
+                message += '- ADDRS: ' + ' '.join(addrs)
+                logger.log(loglevel, message)
+
+    return bool(result['matched'])
 
 
 def browse_config(config):
@@ -106,7 +141,8 @@ def browse_config(config):
         threshold = section.getint('threshold')
 
         if check_neighborhood(section.get('filter_on'),
-                              section.get('exclude', fallback=None)):
+                              section.get('exclude', fallback=None),
+                              section.get('nslookup', fallback=False)):
             cmd = section.get('command_neighbor')
             result = 'neighbor'
         else:
@@ -165,6 +201,7 @@ def set_logger(loglevel, logfile=None):
 
 def main():
     config = ConfigParser(defaults={
+            'nslookup': 'false',
             'loglevel': 'INFO',
             'error_on_stderr': 'true',
             'cache_file': '/run/shm/mind_your_neighbors.cache',
