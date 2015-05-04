@@ -79,7 +79,7 @@ def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
     """
     logger = logging.getLogger('MindYourNeighbors')
 
-    regex = re.compile('.*%s.*(REACHABLE|STALE)' % filter_on)
+    regex = re.compile('.*%s.*REACHABLE' % filter_on)
 
     if exclude:
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
@@ -105,7 +105,7 @@ def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
                           (logging.DEBUG, 'no match')):
         if logger.isEnabledFor(loglevel):
             for mac, addrs in addr_by_mac[key].items():
-                message = '%s - %s - ' % (key.upper(), mac)
+                message = '%s - %s' % (key.upper(), mac)
                 if lookup_addr:
                     fqdns = set()
                     for addr in addrs:
@@ -113,8 +113,9 @@ def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
                         if fqdn is not None:
                             fqdns.add(fqdn)
                     if fqdns:
-                        message += '- FQDNS: ' + ' '.join(fqdns)
-                message += '- ADDRS: ' + ' '.join(addrs)
+                        message += ' - FQDNS: ' + ' '.join(fqdns)
+                if addrs:
+                    message += ' - ADDRS: ' + ' '.join(addrs)
                 logger.log(loglevel, message)
 
     return bool(result['matched'])
