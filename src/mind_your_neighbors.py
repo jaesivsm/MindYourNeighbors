@@ -57,8 +57,11 @@ class Cache:
 
 
 @lru_cache(maxsize=None)
-def ip_neigh():
-    return Popen(['ip', 'neigh'], stdout=PIPE, stderr=PIPE)\
+def ip_neigh(device=None):
+    command = ['ip', 'neigh', 'show']
+    if device is not None:
+        command += ['dev', device]
+    return Popen(command, stdout=PIPE, stderr=PIPE)\
             .communicate()[0].decode('utf8').splitlines()
 
 
@@ -72,7 +75,8 @@ def nslookup(addr):
     return None
 
 
-def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
+def check_neighborhood(filter_on, exclude=None,
+                       lookup_addr=False, device=None):
     """Will execute *ip neigh* unless the result of the command has been
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
@@ -85,7 +89,7 @@ def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
         exclude = re.compile(".*(%s).*" % '|'.join(exclude.split(',')))
     result = defaultdict(list)
     addr_by_mac = defaultdict(lambda: defaultdict(list))
-    for neighbor in ip_neigh():
+    for neighbor in ip_neigh(device=device):
         if exclude and exclude.match(neighbor):
             key = 'excluded'
         elif regex.match(neighbor):
@@ -94,7 +98,10 @@ def check_neighborhood(filter_on, exclude=None, lookup_addr=False):
             key = 'no match'
         result[key] = neighbor
         try:  # debugging informations gathering
-            addr, _, _, _, mac, _ = neighbor.split()
+            if device is None:
+                addr, _, _, _, mac, _ = neighbor.split()
+            else:
+                addr, _, mac, _ = neighbor.split()
             addr_by_mac[key][mac].append(addr)
         except Exception:
             pass
@@ -132,7 +139,7 @@ def browse_config(config):
         if section.name == config.default_section:
             continue
 
-        if not section.getboolean('enabled', fallback=False):
+        if not section.getboolean('enabled'):
             logger.debug('section %r not enabled', section)
             continue
 
@@ -140,10 +147,12 @@ def browse_config(config):
         cache = Cache(section, cache_file)
 
         threshold = section.getint('threshold')
+        filter_on = section.get('filter_on')
+        exclude = section.get('exclude')
+        nslookup = section.get('nslookup')
+        device = section.get('device')
 
-        if check_neighborhood(section.get('filter_on'),
-                              section.get('exclude', fallback=None),
-                              section.get('nslookup', fallback=False)):
+        if check_neighborhood(filter_on, exclude, nslookup, device):
             cmd = section.get('command_neighbor')
             result = 'neighbor'
         else:
@@ -202,6 +211,7 @@ def set_logger(loglevel, logfile=None):
 
 def main():
     config = ConfigParser(defaults={
+            'enabled': 'true',
             'nslookup': 'false',
             'loglevel': 'INFO',
             'error_on_stderr': 'true',
