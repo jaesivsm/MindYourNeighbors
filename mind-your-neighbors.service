@@ -1,0 +1,11 @@
+[Unit]
+Description=Mind your neighbors service
+After=tlp-init.service
+
+[Service]
+Restart=on-abort
+ExecStart=/usr/local/bin/mind_your_neighbors --loop
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

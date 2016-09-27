@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import re
+import sys
 import json
+import signal
 import logging
 from os import path
-from functools import lru_cache
+from time import sleep
 from subprocess import Popen, PIPE
 from collections import defaultdict
 from configparser import ConfigParser
@@ -42,7 +44,7 @@ class Cache:
         if count != threshold:
             logger = logging.getLogger('MindYourNeighbors')
             logger.debug('cache/%s/%s %d => %d', self.section_name, result,
-                        count, self.get_result_count(result))
+                         count, self.get_result_count(result))
 
     def get_result_count(self, result):
         return self.section['results'].count(result)
@@ -56,7 +58,6 @@ class Cache:
         return self.section['last_command']
 
 
-@lru_cache(maxsize=None)
 def ip_neigh(device=None):
     command = ['ip', 'neigh', 'show']
     if device is not None:
@@ -65,7 +66,6 @@ def ip_neigh(device=None):
             .communicate()[0].decode('utf8').splitlines()
 
 
-@lru_cache(maxsize=None)
 def nslookup(addr):
     result = Popen(['nslookup', addr], stdout=PIPE, stderr=PIPE)\
             .communicate()[0].decode('utf8')
@@ -163,7 +163,7 @@ def browse_config(config):
         logger.info('%r - cache state: %r', section.name, cache.section)
         count = cache.get_result_count(result)
         if count != threshold:
-            logger.warn("%r - cache count hasn't reached threshold yet "
+            logger.info("%r - cache count hasn't reached threshold yet "
                         "(%d/%d)", section.name, count, threshold)
             continue
         if cache.last_command == cmd:
@@ -176,7 +176,7 @@ def browse_config(config):
             processes[section.name] = Popen(cmd.split(),
                                             stdout=PIPE, stderr=PIPE)
         else:
-            logger.info('no command to launch')
+            logger.warn('%r - no command to launch', section.name)
 
     Cache.dump(cache_file)
     for section in processes:
@@ -207,22 +207,46 @@ def set_logger(loglevel, logfile=None):
     handler.setLevel(log_level)
     logger.addHandler(handler)
     logger.setLevel(log_level)
+    return logger
 
 
-def main():
-    config = ConfigParser(defaults={
-            'enabled': 'true',
-            'nslookup': 'false',
-            'loglevel': 'INFO',
-            'error_on_stderr': 'true',
-            'cache_file': '/run/shm/mind_your_neighbors.cache',
-            'threshold': '3',
-    })
+def get_config(config=None):
+    if not config:
+        config = ConfigParser(defaults={
+                'enabled': 'true',
+                'nslookup': 'false',
+                'loglevel': 'INFO',
+                'error_on_stderr': 'true',
+                'cache_file': '/run/shm/mind_your_neighbors.cache',
+                'threshold': '3',
+                'loop_time_sec': '120',
+        })
+
     config.read(['/etc/mind_your_neighbors.conf',
                 path.expanduser('~/.config/mind_your_neighbors.conf')])
     set_logger(config.get(config.default_section, 'loglevel'),
                config.get(config.default_section, 'logfile', fallback=None))
-    browse_config(config)
+    return config
+
+
+def main():
+    config = get_config()
+
+    loop_time_sec = config.getint(config.default_section, 'loop_time_sec')
+
+    def handle_sighup(signum, frame):
+        logger = logging.getLogger('MindYourNeighbors')
+        logger.warn('reloading configuration')
+        get_config(config)
+
+    signal.signal(signal.SIGHUP, handle_sighup)
+
+    if '--loop' in sys.argv:
+        while True:
+            browse_config(config)
+            sleep(loop_time_sec)
+    else:
+        browse_config(config)
 
 
 if __name__ == '__main__':
