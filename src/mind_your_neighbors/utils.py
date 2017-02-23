@@ -4,24 +4,30 @@ from configparser import ConfigParser
 from logging.handlers import SysLogHandler
 
 
-def set_logger(loglevel, logfile=None):
+def set_logger(loglevel, logfile=None, write_to_term=False):
     logger = logging.getLogger('MindYourNeighbors')
-    log_level = getattr(logging, loglevel.upper())
+    # cleaning existing handlers
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
+
     base_format = '%(levelname)s - %(message)s'
+    if write_to_term:
+        logger.addHandler(logging.StreamHandler())
     if logfile:
-        handler = logging.FileHandler(path.expanduser(logfile))
+        logger.addHandler(logging.FileHandler(path.expanduser(logfile)))
         formatter = logging.Formatter('%(asctime)s ' + base_format)
     else:
-        handler = SysLogHandler(address='/dev/log')
+        logger.addHandler(SysLogHandler(address='/dev/log'))
         formatter = logging.Formatter('%(name)s: ' + base_format)
-    handler.setFormatter(formatter)
-    handler.setLevel(log_level)
+    for handler in logger.handlers:
+        handler.setFormatter(formatter)
+        handler.setLevel(loglevel)
     logger.addHandler(handler)
-    logger.setLevel(log_level)
+    logger.setLevel(loglevel)
     return logger
 
 
-def get_config(config=None):
+def get_config(config=None, force_verbose=False, write_to_term=False):
     if not config:
         config = ConfigParser(defaults={
                 'enabled': 'true',
@@ -35,6 +41,13 @@ def get_config(config=None):
 
     config.read(['/etc/mind_your_neighbors.conf',
                 path.expanduser('~/.config/mind_your_neighbors.conf')])
-    set_logger(config.get(config.default_section, 'loglevel'),
-               config.get(config.default_section, 'logfile', fallback=None))
+    if force_verbose:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = config.get(config.default_section, 'loglevel')
+        loglevel = getattr(logging, loglevel.upper())
+
+    logfile = config.get(config.default_section, 'logfile', fallback=None)
+
+    set_logger(loglevel, logfile, write_to_term)
     return config

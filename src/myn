@@ -1,28 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import sys
 import signal
 import logging
 from time import sleep
+from argparse import ArgumentParser
 
 from mind_your_neighbors.main import browse_config
 from mind_your_neighbors.utils import get_config
 
 
+def parse_cmd_line_args():
+    parser = ArgumentParser("myn (Mind Your Neighbors) - launching scripts "
+                            "depending on you direct neighbors")
+    parser.add_argument('-l', '--loop', action='store_true',
+                        dest='loop', default=False, help="will run infinitly "
+                        "(useful for daemonizing through SystemD)")
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        dest='verbose', default=False, help="set the log "
+                        "level to DEBUG (every message available will be "
+                        "displayed")
+    parser.add_argument('-o', '--output', action='store_true',
+                        dest='write_to_term', default=False, help="logs will "
+                        "be written on stdout (and not just in the logfile "
+                        "specified in configuration)")
+    return parser.parse_args()
+
+
 def main():
-    config = get_config()
+    args = parse_cmd_line_args()
+    config = get_config(force_verbose=args.verbose,
+                        write_to_term=args.write_to_term)
 
     loop_time_sec = config.getint(config.default_section, 'loop_time_sec')
+    logger = logging.getLogger('MindYourNeighbors')
 
     # attaching signal to handle reload from init manager
     def handle_sighup(signum, frame):
-        logger = logging.getLogger('MindYourNeighbors')
         logger.warn('reloading configuration')
-        get_config(config)
+        get_config(config, force_verbose=args.verbose,
+                   write_to_term=args.write_to_term)
 
     signal.signal(signal.SIGHUP, handle_sighup)
 
-    if '--loop' in sys.argv:
+    logger.info('MindYourNeighbors initialized')
+    if args.loop:
         while True:
             browse_config(config)
             sleep(loop_time_sec)
