@@ -3,9 +3,10 @@ from os import path
 from configparser import ConfigParser
 from logging.handlers import SysLogHandler
 
+logger = logging.getLogger('MindYourNeighbors')
+
 
 def set_logger(loglevel, logfile=None, write_to_term=False):
-    logger = logging.getLogger('MindYourNeighbors')
     # cleaning existing handlers
     for handler in logger.handlers:
         logger.removeHandler(handler)

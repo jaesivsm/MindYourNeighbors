@@ -9,6 +9,8 @@ from cronex import CronExpression
 from mind_your_neighbors.cache import Cache
 from mind_your_neighbors.commands import ip_neigh, nslookup
 
+logger = logging.getLogger('MindYourNeighbors')
+
 
 def check_neighborhood(filter_on, exclude=None,
                        lookup_addr=False, device=None):
@@ -16,8 +18,6 @@ def check_neighborhood(filter_on, exclude=None,
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
     """
-    logger = logging.getLogger('MindYourNeighbors')
-
     regex = re.compile('.*%s.*REACHABLE' % filter_on)
 
     if exclude:
@@ -63,13 +63,12 @@ def check_neighborhood(filter_on, exclude=None,
     return bool(result['matched'])
 
 
-def browse_config(config):
+@Cache
+def browse_config(config, cache):
     """Will browse all section of the config,
     fill cache and launch command when needed.
     """
     processes = {}
-    logger = logging.getLogger('MindYourNeighbors')
-    cache_file = config.get(config.default_section, 'cache_file')
     now = datetime.now()
     now = (now.year, now.month, now.day, now.hour, now.minute)
     for section in config.values():
@@ -86,7 +85,7 @@ def browse_config(config):
             continue
 
         logger.debug('%r - processing section', section.name)
-        cache = Cache(section, cache_file)
+        cache.section_name = section.name
 
         threshold = section.getint('threshold')
         filter_on = section.get('filter_on')
@@ -120,7 +119,6 @@ def browse_config(config):
         else:
             logger.info('%r - no command to launch', section.name)
 
-    Cache.dump(cache_file)
     for section in processes:
         if not config.getboolean(section, 'error_on_stderr', fallback=False):
             continue
@@ -130,6 +128,6 @@ def browse_config(config):
             continue
         logger.error('%r - an error occured, removing stored command',
                      section.name)
-        cache = Cache(section, cache_file)
+        cache.section_name = section.name
         cache.cache_command(None)
         logger.error('%r - command stderr was: %r', section.name, stderr)

@@ -8,6 +8,8 @@ from argparse import ArgumentParser
 from mind_your_neighbors.main import browse_config
 from mind_your_neighbors.utils import get_config
 
+logger = logging.getLogger('MindYourNeighbors')
+
 
 def parse_cmd_line_args():
     parser = ArgumentParser("myn (Mind Your Neighbors) - launching scripts "
@@ -32,7 +34,6 @@ def main():
                         write_to_term=args.write_to_term)
 
     loop_time_sec = config.getint(config.default_section, 'loop_time_sec')
-    logger = logging.getLogger('MindYourNeighbors')
 
     # attaching signal to handle reload from init manager
     def handle_sighup(signum, frame):

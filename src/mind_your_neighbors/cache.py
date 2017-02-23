@@ -1,26 +1,42 @@
 import json
 import logging
 from os import path
+from functools import wraps
+
+logger = logging.getLogger('MindYourNeighbors')
 
 
 class Cache:
-    __cache_dict = {}
 
-    def __init__(self, section, cache_file):
-        self.section_name = section.name
-        if not self.__cache_dict and path.exists(cache_file):
-            with open(cache_file, 'r') as fp:
+    def __init__(self, cache_file):
+        self.section_name = None
+        self.cache_file = cache_file
+        self.__cache_dict = {}
+
+    def __enter__(self):
+        if path.exists(self.cache_file):
+            with open(self.cache_file, 'r') as fp:
                 self.__cache_dict.update(json.load(fp))
+        return self
+
+    def __exit__(self, rtype, rvalue, traceback):
+        with open(self.cache_file, 'w') as fp:
+            json.dump(self.__cache_dict, fp)
 
     @classmethod
-    def dump(cls, cache_file):
-        if cls.__cache_dict is not None:
-            with open(cache_file, 'w') as fp:
-                json.dump(cls.__cache_dict, fp)
+    def __call__(cls, func):
+        "Will wrap func between cache constructing and cache dumping."
+        @wraps(func)
+        def wrapper(config, *args, **kwargs):
+            cache_file = config.get(config.default_section, 'cache_file')
+            with cls(cache_file) as cache:
+                return wrapper(config, cache, *args, **kwargs)
+        return wrapper
 
     @property
     def section(self):
         """Returns the stored dictionnary for the instance's section."""
+        assert self.section_name is not None, "you must set section_name"
         if self.section_name not in self.__cache_dict:
             self.__cache_dict[self.section_name] = {
                     'results': [], 'last_command': None}
@@ -32,7 +48,6 @@ class Cache:
         self.section['results'].append(result)
         self.section['results'] = self.section['results'][-threshold:]
         if count != threshold:
-            logger = logging.getLogger('MindYourNeighbors')
             logger.debug('cache/%s/%s %d => %d', self.section_name, result,
                          count, self.get_result_count(result))
 
