@@ -3,7 +3,7 @@ from setuptools import setup
 
 
 setup(name='MindYourNeighbors',
-      version='0.0.2',
+      version='0.0.3',
       description='IP Neighbors table watching script',
       keywords='ip-neigh arp',
       classifiers=[
@@ -22,4 +22,5 @@ setup(name='MindYourNeighbors',
       package_dir={'mind_your_neighbors': 'src/mind_your_neighbors'},
       url='https://github.com/jaesivsm/MindYourNeighbors',
       data_files=[('/etc/systemd/system', ['mind-your-neighbors.service'])],
+      install_requires=['cronex>=0.1.1'],
       )

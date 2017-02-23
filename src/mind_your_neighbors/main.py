@@ -1,7 +1,10 @@
 import re
 import logging
+from datetime import datetime
 from subprocess import Popen, PIPE
 from collections import defaultdict
+
+from cronex import CronExpression
 
 from mind_your_neighbors.cache import Cache
 from mind_your_neighbors.commands import ip_neigh, nslookup
@@ -67,12 +70,19 @@ def browse_config(config):
     processes = {}
     logger = logging.getLogger('MindYourNeighbors')
     cache_file = config.get(config.default_section, 'cache_file')
+    now = datetime.now()
+    now = (now.year, now.month, now.day, now.hour, now.minute)
     for section in config.values():
         if section.name == config.default_section:
             continue
 
         if not section.getboolean('enabled'):
             logger.debug('section %r not enabled', section)
+            continue
+
+        cron = section.get('cron')
+        if cron and not CronExpression(cron).check_trigger(now):
+            logger.debug('section %r disabled for now', section)
             continue
 
         logger.debug('%r - processing section', section.name)

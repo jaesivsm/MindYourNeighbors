@@ -41,3 +41,4 @@ When the cache is filled the only `neighbor` or `no neighbor` markers, the corre
  * `enable`: a boolean (`true` or `false`), enabling or disabling a section.
  * `nslookup`: a boolean (`true` or `false`), making *MindYourNeighbors* looking up domain names for IP it'll print in the logs. Can be useful for debuging.
  * `error_on_stderr`: a boolean (`true` or `false`); if `true` and the command print something on *stderr*, the command will be ignored and executed again.
+ * `cron`: a cron styled time description in which the section will be activated
