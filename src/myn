@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import sys
+import signal
+import logging
+from time import sleep
+
+from mind_your_neighbors.main import browse_config
+from mind_your_neighbors.utils import get_config
+
+
+def main():
+    config = get_config()
+
+    loop_time_sec = config.getint(config.default_section, 'loop_time_sec')
+
+    # attaching signal to handle reload from init manager
+    def handle_sighup(signum, frame):
+        logger = logging.getLogger('MindYourNeighbors')
+        logger.warn('reloading configuration')
+        get_config(config)
+
+    signal.signal(signal.SIGHUP, handle_sighup)
+
+    if '--loop' in sys.argv:
+        while True:
+            browse_config(config)
+            sleep(loop_time_sec)
+    else:
+        browse_config(config)
+
+
+if __name__ == '__main__':
+    main()
