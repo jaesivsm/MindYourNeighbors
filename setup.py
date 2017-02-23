@@ -21,6 +21,6 @@ setup(name='MindYourNeighbors',
       packages=['mind_your_neighbors'],
       package_dir={'mind_your_neighbors': 'src/mind_your_neighbors'},
       url='https://github.com/jaesivsm/MindYourNeighbors',
-      data_files=[('/etc/systemd/system', ['mind-your-neighbors.service'])],
+      #data_files=[('/etc/systemd/system', ['mind-your-neighbors.service'])],
       install_requires=['cronex>=0.1.1'],
       )

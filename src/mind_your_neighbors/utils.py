@@ -3,6 +3,8 @@ from os import path
 from configparser import ConfigParser
 from logging.handlers import SysLogHandler
 
+from mind_your_neighbors.const import KNOWN_MACHINES_SECTION
+
 logger = logging.getLogger('MindYourNeighbors')
 
 
@@ -52,3 +54,11 @@ def get_config(config=None, force_verbose=False, write_to_term=False):
 
     set_logger(loglevel, logfile, write_to_term)
     return config
+
+
+def get_known_machines(config):
+    if KNOWN_MACHINES_SECTION not in config.sections():
+        return {}
+    known_machines_section = config[KNOWN_MACHINES_SECTION]
+    return {mac_addr: device
+            for device, mac_addr in dict(known_machines_section).items()}
