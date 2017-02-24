@@ -15,7 +15,7 @@ I wanted to shut down this software when other users were using the network.
 
 ## Features
 
-*MindYourNeighbors* behavior's can be controlled through configuration file placed either in `~/.config/mind_your_neighbords.conf` or in `/etc/mind_your_neighbords.conf`.
+*MindYourNeighbors* behavior's can be controlled through configuration file placed either in `~/.config/mind_your_neighbords.cfg` or in `/etc/mind_your_neighbords.cfg`.
 
 The configuration file is organized in sections. The **DEFAULT** section holds the default options which will be inherited by all the other sections (except for the logging level and the cache file path). All the other section will be read one by one ; each time the condition defined in `filter_on_regex` or `filter_on_machine` is matched and isn't excluded by those defined in neither `exclude`, `filter_out_regex` or `filter_out_machine` the cache will be filled with either a marker `neighbor` or a marker `no neighbor`.
 

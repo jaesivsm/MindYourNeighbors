@@ -42,8 +42,8 @@ def get_config(config=None, force_verbose=False, write_to_term=False):
                 'loop_time_sec': '120',
         })
 
-    config.read(['/etc/mind_your_neighbors.conf',
-                path.expanduser('~/.config/mind_your_neighbors.conf')])
+    config.read(['/etc/mind_your_neighbors.cfg',
+                path.expanduser('~/.config/mind_your_neighbors.cfg')])
     if force_verbose:
         loglevel = logging.DEBUG
     else:
