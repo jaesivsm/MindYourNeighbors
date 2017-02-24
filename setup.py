@@ -3,13 +3,15 @@ from setuptools import setup
 
 
 setup(name='MindYourNeighbors',
-      version='0.0.3',
+      version='0.2.0',
       description='IP Neighbors table watching script',
       keywords='ip-neigh arp',
       classifiers=[
           "Intended Audience :: System Administrators",
           "Programming Language :: Python :: 3",
-          "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+          "License :: OSI Approved :: Apache Software License",
+          "Operating System :: POSIX :: Linux",
+          "Development Status :: 4 - Beta",
           "Topic :: System :: Networking :: Monitoring :: Hardware Watchdog",
           "Topic :: System :: Networking"],
       license="GPLv3",

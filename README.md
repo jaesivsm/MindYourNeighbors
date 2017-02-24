@@ -27,7 +27,7 @@ When the cache is filled the only `neighbor` or `no neighbor` markers, the corre
 
 You can fill a section with `known_machine` as title in which you'll write the name and mac address of machine you're aware of. You'll then be able to filter them out or in through `filter_out_machine` and `filter_on_machine`.
 
-Regers to the configuration example file for practical use cases.
+Please refer to the configuration example file for practical use cases.
 
 ## Options list
 
