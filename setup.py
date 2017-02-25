@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 from setuptools import setup
 
+with open('README.md') as fd:
+    readme = fd.read()
+
 
 setup(name='MindYourNeighbors',
       version='0.2.0',
       description='IP Neighbors table watching script',
+      long_description=readme,
       keywords='ip-neigh arp',
       classifiers=[
           "Intended Audience :: System Administrators",
@@ -23,6 +27,5 @@ setup(name='MindYourNeighbors',
       packages=['mind_your_neighbors'],
       package_dir={'mind_your_neighbors': 'src/mind_your_neighbors'},
       url='https://github.com/jaesivsm/MindYourNeighbors',
-      data_files=[('/etc/systemd/system', ['mind-your-neighbors.service'])],
       install_requires=['cronex>=0.1.1'],
       )
