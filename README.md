@@ -2,6 +2,8 @@
 
 Launching scripts depending on you direct neighbors
 
+[![Build Status](https://travis-ci.org/jaesivsm/MindYourNeighbors.svg?branch=master)](https://travis-ci.org/jaesivsm/MindYourNeighbors) [![Coverage Status](https://coveralls.io/repos/github/jaesivsm/MindYourNeighbors/badge.svg?branch=master)](https://coveralls.io/github/jaesivsm/MindYourNeighbors?branch=master) [![Code Climate](https://codeclimate.com/github/jaesivsm/MindYourNeighbors/badges/gpa.svg)](https://codeclimate.com/github/jaesivsm/MindYourNeighbors)
+
 ## How ?
 
 *MindYourNeighbors* basically parse the ip-neighbor and, if results are found that are not excluded by the configuration, a configured command will be launched once.

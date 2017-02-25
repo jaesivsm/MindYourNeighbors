@@ -18,6 +18,10 @@ def _split(string, lower=True):
             for split in string.split(',')]
 
 
+def _to_filter_on_mac(list_, mapping):
+    return {mapping[str_] for str_ in _split(list_) if str_ in mapping}
+
+
 def logging_results(addr_by_mac, lookup_addr):
     """Will fire several logging message with levels depending on matching
     status"""
@@ -38,6 +42,26 @@ def logging_results(addr_by_mac, lookup_addr):
                 logger.log(loglevel, message)
 
 
+def process_filters(filter_on_regex, filter_out_regex, exclude,
+                    filter_on_machines, filter_out_machines, known_machines):
+    filter_on, filter_out = [const.REACHABLE.match], []
+    filter_on_mac, filter_out_mac = set(), set()
+
+    if filter_on_regex:
+        filter_on.append(re.compile(filter_on_regex).match)
+    if filter_out_regex:
+        filter_out.append(re.compile(filter_out_regex).match)
+    if known_machines and filter_on_machines:
+        filter_on_mac = _to_filter_on_mac(filter_on_machines, known_machines)
+    if known_machines and filter_out_machines:
+        filter_out_mac = _to_filter_on_mac(filter_out_machines, known_machines)
+    if exclude:
+        filter_out.append(lambda string: any(value in string
+                            for value in _split(exclude, lower=False)))
+
+    return filter_on, filter_out, filter_on_mac, filter_out_mac
+
+
 def check_neighborhood(neighbors, filter_on_regex=None, filter_out_regex=None,
                        filter_on_machines=None, filter_out_machines=None,
                        exclude=None, lookup_addr=False, known_machines=None):
@@ -45,31 +69,16 @@ def check_neighborhood(neighbors, filter_on_regex=None, filter_out_regex=None,
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
     """
-    filter_on, filter_out = [const.REACHABLE.match], []
-    filter_on_macs, filter_out_macs = set(), set()
-
-    if filter_on_regex:
-        filter_on.append(re.compile(filter_on_regex).match)
-    if filter_out_regex:
-        filter_out.append(re.compile(filter_out_regex).match)
-    if known_machines and filter_on_machines:
-        filter_on_macs = {known_machines[name]
-                          for name in _split(filter_on_machines)
-                          if name in known_machines}
-    if known_machines and filter_out_machines:
-        filter_out_macs = {known_machines[name]
-                           for name in _split(filter_out_machines)
-                           if name in known_machines}
-    if exclude:
-        filter_out.append(lambda string: any(value in string
-                            for value in _split(exclude, lower=False)))
+    filter_on, filter_out, filter_on_mac, filter_out_mac = process_filters(
+            filter_on_regex, filter_out_regex, exclude, filter_on_machines,
+            filter_out_machines, known_machines)
     result = defaultdict(list)
     addr_by_mac = defaultdict(lambda: defaultdict(list))
     for line, addr, mac in neighbors:
-        if any(match(line) for match in filter_out) or mac in filter_out_macs:
+        if any(match(line) for match in filter_out) or mac in filter_out_mac:
             key = const.MatchResult.EXCLUDED
         elif all(match(line) for match in filter_on) \
-                and (not filter_out_macs or mac in filter_on_macs):
+                and (not filter_on_mac or mac in filter_on_mac):
             key = const.MatchResult.MATCHED
         else:
             key = const.MatchResult.NO_MATCH

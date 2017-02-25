@@ -1,0 +1,23 @@
+language: python
+python:
+  - "3.4"
+
+cache:
+  directories:
+    - $HOME/.cache/pip
+before_cache:
+  - rm -f $HOME/.cache/pip/log/debug.log
+
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get -qq install -y git build-essential
+install:
+  - pip install coverage pep8 coveralls
+
+script:
+  - PYTHONPATH=$PYTHONPATH:src/ coverage run --source src/ setup.py test -s tests
+  # ignoring aligning / line breaking non-sens
+  - pep8 --ignore=E126,E127,E128,W503 src/
+
+after_success:
+  - coveralls
