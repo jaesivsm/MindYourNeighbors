@@ -30,17 +30,20 @@ def set_logger(loglevel, logfile=None, write_to_term=False):
     return logger
 
 
-def get_config(config=None, force_verbose=False, write_to_term=False):
-    if not config:
-        config = ConfigParser(defaults={
+def _get_default_config():
+    return ConfigParser(defaults={
                 'enabled': 'true',
                 'nslookup': 'false',
                 'loglevel': 'INFO',
                 'error_on_stderr': 'true',
                 'cache_file': '/run/shm/mind_your_neighbors.cache',
                 'threshold': '3',
-                'loop_time_sec': '120',
-        })
+                'loop_time_sec': '120'})
+
+
+def get_config(config=None, force_verbose=False, write_to_term=False):
+    if not config:
+        config = _get_default_config()
 
     config.read(['/etc/mind_your_neighbors.cfg',
                 path.expanduser('~/.config/mind_your_neighbors.cfg')])

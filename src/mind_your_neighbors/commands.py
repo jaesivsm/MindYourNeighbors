@@ -1,8 +1,12 @@
 from subprocess import Popen, PIPE
 
 
+def execute(cmd):
+    return Popen(cmd, stdout=PIPE, stderr=PIPE)
+
+
 def get_output_from_cmd(cmd):
-    return Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0].decode('utf8')
+    return execute(cmd).communicate()[0].decode('utf8')
 
 
 def ip_neigh(device=None):
@@ -10,7 +14,9 @@ def ip_neigh(device=None):
     if device is not None:
         command += ['dev', device]
     for line in get_output_from_cmd(command).splitlines():
-        if device is None:
+        if 'lladdr' not in line:
+            addr, mac = '', ''
+        elif device is None:
             addr, _, _, _, mac, _ = line.split()
         else:
             addr, _, mac, _ = line.split()

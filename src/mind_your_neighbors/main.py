@@ -1,14 +1,11 @@
 import re
 import logging
 from datetime import datetime
-from subprocess import Popen, PIPE
 from collections import defaultdict
 
 from cronex import CronExpression
 
-from mind_your_neighbors import utils, const
-from mind_your_neighbors.cache import Cache
-from mind_your_neighbors.commands import ip_neigh, nslookup
+from mind_your_neighbors import utils, const, commands, cache
 
 logger = logging.getLogger('MindYourNeighbors')
 
@@ -22,22 +19,30 @@ def _to_filter_on_mac(list_, mapping):
     return {mapping[str_] for str_ in _split(list_) if str_ in mapping}
 
 
-def logging_results(addr_by_mac, lookup_addr):
+def logging_results(addr_by_mac, lookup_addr, known_machines):
     """Will fire several logging message with levels depending on matching
     status"""
+    rev_machine = {mac: name for name, mac in known_machines.items()} \
+            if known_machines else {}
+
     for loglevel, key in const.LOG_TO_MATCH_RES_MAPPING:
         if logger.isEnabledFor(loglevel):
             for mac, addrs in addr_by_mac[key].items():
-                message = '%s - %s' % (key.upper(), mac)
-                if lookup_addr:
+                message = '%s - %s' % (key.name, mac)
+                written = False
+                if mac in rev_machine:
+                    written = True
+                    message += ' - MACHINE: %s' % rev_machine[mac]
+                elif lookup_addr:
+                    written = True
                     fqdns = set()
                     for addr in addrs:
-                        fqdn = nslookup(addr)
+                        fqdn = commands.nslookup(addr)
                         if fqdn is not None:
                             fqdns.add(fqdn)
                     if fqdns:
                         message += ' - FQDNS: ' + ' '.join(fqdns)
-                if addrs:
+                if not written and addrs:
                     message += ' - ADDRS: ' + ' '.join(addrs)
                 logger.log(loglevel, message)
 
@@ -69,6 +74,7 @@ def check_neighborhood(neighbors, filter_on_regex=None, filter_out_regex=None,
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
     """
+
     filter_on, filter_out, filter_on_mac, filter_out_mac = process_filters(
             filter_on_regex, filter_out_regex, exclude, filter_on_machines,
             filter_out_machines, known_machines)
@@ -85,7 +91,7 @@ def check_neighborhood(neighbors, filter_on_regex=None, filter_out_regex=None,
         result[key].append(line)
         addr_by_mac[key][mac].append(addr)
 
-    logging_results(addr_by_mac, lookup_addr)
+    logging_results(addr_by_mac, lookup_addr, known_machines)
     return bool(result[const.MatchResult.MATCHED])
 
 
@@ -106,7 +112,7 @@ def handle_processes(processes, config, cache):
         logger.error('%r - command stderr was: %r', section.name, stderr)
 
 
-@Cache
+@cache.wrap
 def browse_config(config, cache):
     """Will browse all section of the config,
     fill cache and launch command when needed.
@@ -114,11 +120,11 @@ def browse_config(config, cache):
     processes = {}
     now = datetime.now()
     now = (now.year, now.month, now.day, now.hour, now.minute)
-    neighbors_by_device = {}
+    nghbrs_by_dev = {}
     excluded_sections = {config.default_section, const.KNOWN_MACHINES_SECTION}
     known_machines = utils.get_known_machines(config)
     for section in config.values():
-        if section.name not in excluded_sections:
+        if section.name in excluded_sections:
             continue
 
         if not section.getboolean('enabled'):
@@ -133,12 +139,12 @@ def browse_config(config, cache):
         logger.debug('%r - processing section', section.name)
         cache.section_name = section.name
         device = section.get('device')
-        if device not in neighbors_by_device:
-            neighbors_by_device[device] = list(ip_neigh(device=device))
+        if device not in nghbrs_by_dev:
+            nghbrs_by_dev[device] = list(commands.ip_neigh(device=device))
 
         threshold = section.getint('threshold')
 
-        if check_neighborhood(neighbors_by_device[device],
+        if check_neighborhood(nghbrs_by_dev[device],
                               section.get('filter_on_regex'),
                               section.get('filter_out_regex'),
                               section.get('filter_on_machines'),
@@ -165,9 +171,8 @@ def browse_config(config, cache):
 
         cache.cache_command(cmd)
         if cmd:
-            logger.warn('%r - launching: %r', section.name, cmd)
-            processes[section.name] = Popen(cmd.split(),
-                                            stdout=PIPE, stderr=PIPE)
+            logger.warning('%r - launching: %r', section.name, cmd)
+            processes[section.name] = commands.execute(cmd.split())
         else:
             logger.info('%r - no command to launch', section.name)
 

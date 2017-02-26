@@ -6,7 +6,7 @@ with open('README.md') as fd:
 
 
 setup(name='MindYourNeighbors',
-      version='0.2.0',
+      version='0.5.0',
       description='IP Neighbors table watching script',
       long_description=readme,
       keywords='ip-neigh arp',

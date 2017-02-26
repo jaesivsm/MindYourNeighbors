@@ -37,7 +37,7 @@ def main():
 
     # attaching signal to handle reload from init manager
     def handle_sighup(signum, frame):
-        logger.warn('reloading configuration')
+        logger.warning('reloading configuration')
         get_config(config, force_verbose=args.verbose,
                    write_to_term=args.write_to_term)
 
