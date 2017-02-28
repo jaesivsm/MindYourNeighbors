@@ -9,7 +9,7 @@ class MatchResult(Enum):
     NO_MATCH = 'no match'
 
 
-REACHABLE = re.compile('.*REACHABLE.*')
+REACHABLE = re.compile('.*(REACHABLE|PERMANENT).*')
 KNOWN_MACHINES_SECTION = 'known_machines'
 LOG_TO_MATCH_RES_MAPPING = ((logging.DEBUG, MatchResult.EXCLUDED),
                             (logging.INFO, MatchResult.MATCHED),
