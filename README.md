@@ -50,6 +50,5 @@ Please refer to the configuration example file for practical use cases.
  * `command_no_match`: A command to execute when the cache has been filed with `no neighbor` marker.
  * `device`: if none provide the `ip neigh` command will be parsed else `ip neigh show dev <device>`.
  * `enable`: a boolean (`true` or `false`), enabling or disabling a section.
- * `nslookup`: a boolean (`true` or `false`), making *MindYourNeighbors* looking up domain names for IP it'll print in the logs. Can be useful for debuging.
  * `error_on_stderr`: a boolean (`true` or `false`); if `true` and the command print something on *stderr*, the command will be ignored and executed again.
  * `cron`: a cron styled time description in which the section will be activated

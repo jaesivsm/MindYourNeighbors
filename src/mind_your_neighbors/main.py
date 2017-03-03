@@ -19,7 +19,7 @@ def _to_filter_on_mac(list_, mapping):
     return {mapping[str_] for str_ in _split(list_) if str_ in mapping}
 
 
-def logging_results(addr_by_mac, lookup_addr, known_machines):
+def logging_results(addr_by_mac, known_machines):
     """Will fire several logging message with levels depending on matching
     status"""
     rev_machine = {mac: name for name, mac in known_machines.items()} \
@@ -33,15 +33,6 @@ def logging_results(addr_by_mac, lookup_addr, known_machines):
                 if mac in rev_machine:
                     written = True
                     message += ' - MACHINE: %s' % rev_machine[mac]
-                elif lookup_addr:
-                    written = True
-                    fqdns = set()
-                    for addr in addrs:
-                        fqdn = commands.nslookup(addr)
-                        if fqdn is not None:
-                            fqdns.add(fqdn)
-                    if fqdns:
-                        message += ' - FQDNS: ' + ' '.join(fqdns)
                 if not written and addrs:
                     message += ' - ADDRS: ' + ' '.join(addrs)
                 logger.log(loglevel, message)
@@ -69,7 +60,7 @@ def process_filters(filter_on_regex, filter_out_regex, exclude,
 
 def check_neighborhood(neighbors, filter_on_regex=None, filter_out_regex=None,
                        filter_on_machines=None, filter_out_machines=None,
-                       exclude=None, lookup_addr=False, known_machines=None):
+                       exclude=None, known_machines=None):
     """Will execute *ip neigh* unless the result of the command has been
     cached. Will then compile a specific regex for the given parameters and
     return True if matching result means there is someone in the local network.
@@ -91,7 +82,7 @@ def check_neighborhood(neighbors, filter_on_regex=None, filter_out_regex=None,
         result[key].append(line)
         addr_by_mac[key][mac].append(addr)
 
-    logging_results(addr_by_mac, lookup_addr, known_machines)
+    logging_results(addr_by_mac, known_machines)
     return bool(result[const.MatchResult.MATCHED])
 
 
@@ -117,10 +108,10 @@ def browse_config(config, cache):
     """Will browse all section of the config,
     fill cache and launch command when needed.
     """
+    commands.ip_neigh.cache_clear()
     processes = {}
     now = datetime.now()
     now = (now.year, now.month, now.day, now.hour, now.minute)
-    nghbrs_by_dev = {}
     excluded_sections = {config.default_section, const.KNOWN_MACHINES_SECTION}
     known_machines = utils.get_known_machines(config)
     for section in config.values():
@@ -139,18 +130,16 @@ def browse_config(config, cache):
         logger.debug('%r - processing section', section.name)
         cache.section_name = section.name
         device = section.get('device')
-        if device not in nghbrs_by_dev:
-            nghbrs_by_dev[device] = list(commands.ip_neigh(device=device))
+        neighbors = commands.ip_neigh(device=device)
 
         threshold = section.getint('threshold')
 
-        if check_neighborhood(nghbrs_by_dev[device],
+        if check_neighborhood(neighbors,
                               section.get('filter_on_regex'),
                               section.get('filter_out_regex'),
                               section.get('filter_on_machines'),
                               section.get('filter_out_machines'),
                               section.get('exclude'),
-                              section.get('nslookup'),
                               known_machines=known_machines):
             cmd = section.get('command_neighbor')
             result = 'neighbor'

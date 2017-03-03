@@ -53,9 +53,7 @@ class MainTest(TestCase):
     @mock.patch('mind_your_neighbors.cache._write_cache')
     @mock.patch('mind_your_neighbors.main.commands.ip_neigh')
     @mock.patch('mind_your_neighbors.main.commands.execute')
-    @mock.patch('mind_your_neighbors.main.commands.nslookup')
-    def test_browse_config(self, mock_nslookup, mock_exec,
-                           mock_neigh, mock_write, mock_read):
+    def test_browse_config(self, mock_exec, mock_neigh, mock_write, mock_read):
         mock_neigh.return_value = NEIGHS
         mock_read.return_value = {}
         mock_exec.return_value.communicate.return_value = (None, None)

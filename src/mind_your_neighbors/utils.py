@@ -33,7 +33,6 @@ def set_logger(loglevel, logfile=None, write_to_term=False):
 def _get_default_config():
     return ConfigParser(defaults={
                 'enabled': 'true',
-                'nslookup': 'false',
                 'loglevel': 'INFO',
                 'error_on_stderr': 'true',
                 'cache_file': '/run/shm/mind_your_neighbors.cache',
